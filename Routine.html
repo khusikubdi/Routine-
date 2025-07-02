@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daily Routine Logger</title>
+<style>
+    body {
+        margin: 0;
+        background: black;
+        color: white;
+        font-family: 'Segoe UI', sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+        transition: background 0.3s, color 0.3s;
+    }
+    h1 { margin-top: 20px; }
+    .date-time { margin: 10px 0; font-size: 1.2em; }
+    .theme-toggle { margin: 10px; cursor: pointer; padding: 6px 15px; border-radius: 5px; background: #333; color: white; border: none; }
+    .calendar { margin: 15px 0; }
+    .task-list { width: 90%; max-width: 500px; margin: 15px 0; padding: 0; list-style: none; }
+    .task {
+        background: #222;
+        margin: 8px 0;
+        padding: 10px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: grab;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        transition: transform 0.2s;
+    }
+    .task:hover { transform: scale(1.02); }
+    .task input[type="checkbox"] { margin-right: 10px; }
+    .task .info { flex-grow: 1; margin-left: 10px; cursor: pointer; }
+    .task .time { margin-left: 10px; cursor: pointer; }
+    .delete-btn {
+        background: transparent;
+        border: none;
+        color: red;
+        font-size: 1.2em;
+        cursor: pointer;
+        margin-left: 10px;
+    }
+    .add-btn { margin: 15px; padding: 8px 20px; border-radius: 5px; background: #444; color: white; border: none; cursor: pointer; }
+    .progress-container { width: 90%; max-width: 500px; margin: 20px 0; }
+    .progress-bar { height: 20px; background: #444; border-radius: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: limegreen; width: 0; transition: width 0.5s ease; }
+    .congrats { margin: 15px 0; color: gold; font-size: 1.3em; animation: pop 0.5s ease; display: none; }
+    @keyframes pop {
+        0% { transform: scale(0.5); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .category-work { border-left: 5px solid dodgerblue; }
+    .category-exercise { border-left: 5px solid limegreen; }
+    .category-study { border-left: 5px solid orange; }
+    .category-leisure { border-left: 5px solid violet; }
+    .dashboard {
+        margin: 20px;
+        background: #222;
+        padding: 15px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        text-align: center;
+    }
+</style>
+</head>
+<body>
+
+<h1>Daily Routine Logger</h1>
+<div class="date-time" id="dateTime"></div>
+<button class="theme-toggle" id="themeToggle">Toggle Theme</button>
+
+<input type="date" id="datePicker" class="calendar">
+
+<ul id="taskList" class="task-list"></ul>
+
+<button class="add-btn" id="addTaskBtn">Add Task</button>
+
+<div class="progress-container">
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+</div>
+
+<div class="congrats" id="congratsMsg">🎉 Congratulations! You completed all tasks! 🎉</div>
+
+<div class="dashboard" id="dashboard">
+    <h3>Task Summary</h3>
+    <div id="dashboardContent">No data</div>
+</div>
+
+<script>
+const dateTimeEl = document.getElementById('dateTime');
+const datePicker = document.getElementById('datePicker');
+const taskList = document.getElementById('taskList');
+const addTaskBtn = document.getElementById('addTaskBtn');
+const progressFill = document.getElementById('progressFill');
+const congratsMsg = document.getElementById('congratsMsg');
+const themeToggle = document.getElementById('themeToggle');
+const dashboardContent = document.getElementById('dashboardContent');
+
+const categories = {
+    'Work': 'category-work',
+    'Exercise': 'category-exercise',
+    'Study': 'category-study',
+    'Leisure': 'category-leisure'
+};
+
+const defaultTasksWeekday = [
+    { name: "Morning Exercise", time: "7:00 AM", category: "Exercise" },
+    { name: "Work/Study Session", time: "9:00 AM", category: "Work" },
+    { name: "Lunch Break", time: "1:00 PM", category: "Leisure" },
+    { name: "Evening Study", time: "6:00 PM", category: "Study" }
+];
+
+const defaultTasksWeekend = [
+    { name: "Morning Walk", time: "8:00 AM", category: "Exercise" },
+    { name: "Leisure Time", time: "11:00 AM", category: "Leisure" },
+    { name: "Family Time", time: "6:00 PM", category: "Leisure" }
+];
+
+let tasks = {};
+
+function updateDateTime() {
+    const now = new Date();
+    dateTimeEl.textContent = now.toLocaleString();
+}
+setInterval(updateDateTime, 1000);
+updateDateTime();
+
+datePicker.valueAsDate = new Date();
+
+function getDateKey() {
+    return datePicker.value || new Date().toISOString().slice(0,10);
+}
+
+function loadTasks() {
+    const dateKey = getDateKey();
+    if (!tasks[dateKey]) {
+        const day = new Date(dateKey).getDay();
+        tasks[dateKey] = (day === 0 || day === 6) ? JSON.parse(JSON.stringify(defaultTasksWeekend)) : JSON.parse(JSON.stringify(defaultTasksWeekday));
+    }
+    renderTasks();
+    updateProgress();
+    updateDashboard();
+}
+
+function renderTasks() {
+    taskList.innerHTML = '';
+    const dateKey = getDateKey();
+    tasks[dateKey].forEach((task, index) => {
+        const li = document.createElement('li');
+        li.className = `task ${categories[task.category] || ''}`;
+        li.draggable = true;
+        li.innerHTML = `
+            <input type="checkbox" ${task.completed ? 'checked' : ''}>
+            <div class="info">${task.name}</div>
+            <div class="time">${task.time}</div>
+            <button class="delete-btn">🗑️</button>
+        `;
+        const checkbox = li.querySelector('input');
+        checkbox.addEventListener('change', () => {
+            task.completed = checkbox.checked;
+            updateProgress();
+        });
+        const info = li.querySelector('.info');
+        info.addEventListener('click', () => {
+            const newName = prompt("Edit task name:", task.name);
+            if (newName) {
+                task.name = newName;
+                renderTasks();
+            }
+        });
+        const time = li.querySelector('.time');
+        time.addEventListener('click', () => {
+            openTimePicker(task);
+        });
+        const delBtn = li.querySelector('.delete-btn');
+        delBtn.addEventListener('click', () => {
+            tasks[dateKey].splice(index, 1);
+            renderTasks();
+            updateProgress();
+            updateDashboard();
+        });
+        setupDrag(li, index);
+        taskList.appendChild(li);
+    });
+}
+
+function openTimePicker(task) {
+    const picker = document.createElement('div');
+    picker.style.position = 'fixed';
+    picker.style.top = '50%';
+    picker.style.left = '50%';
+    picker.style.transform = 'translate(-50%, -50%)';
+    picker.style.background = '#333';
+    picker.style.padding = '15px';
+    picker.style.borderRadius = '8px';
+    picker.style.zIndex = '1000';
+    picker.innerHTML = `
+        <select id="hour">${[...Array(12).keys()].map(i => `<option>${i+1}</option>`).join('')}</select> :
+        <select id="minute">${[...Array(12).keys()].map(i => `<option>${(i*5).toString().padStart(2,'0')}</option>`).join('')}</select>
+        <select id="ampm"><option>AM</option><option>PM</option></select>
+        <button id="setTime">Set</button>
+    `;
+    document.body.appendChild(picker);
+    document.getElementById('setTime').onclick = () => {
+        const h = document.getElementById('hour').value;
+        const m = document.getElementById('minute').value;
+        const ap = document.getElementById('ampm').value;
+        task.time = `${h}:${m} ${ap}`;
+        document.body.removeChild(picker);
+        renderTasks();
+    };
+}
+
+addTaskBtn.onclick = () => {
+    const name = prompt("Task Name:");
+    if (!name) return;
+    const category = prompt("Category (Work, Exercise, Study, Leisure):", "Work");
+    if (!categories[category]) return alert("Invalid category!");
+    const dateKey = getDateKey();
+    tasks[dateKey].push({ name, time: "12:00 PM", category });
+    renderTasks();
+    updateProgress();
+    updateDashboard();
+};
+
+function updateProgress() {
+    const dateKey = getDateKey();
+    const list = tasks[dateKey];
+    const total = list.length;
+    const done = list.filter(t => t.completed).length;
+    const percent = total ? Math.round((done/total)*100) : 0;
+    progressFill.style.width = `${percent}%`;
+    congratsMsg.style.display = percent === 100 ? 'block' : 'none';
+}
+
+function updateDashboard() {
+    const dateKey = getDateKey();
+    const list = tasks[dateKey];
+    const summary = {};
+    list.forEach(t => {
+        summary[t.category] = (summary[t.category] || 0) + 1;
+    });
+    dashboardContent.innerHTML = Object.keys(summary).length ?
+        Object.entries(summary).map(([cat, count]) => `${cat}: ${count}`).join('<br>') :
+        'No tasks';
+}
+
+themeToggle.onclick = () => {
+    document.body.style.background = document.body.style.background === 'black' ? 'white' : 'black';
+    document.body.style.color = document.body.style.color === 'white' ? 'black' : 'white';
+};
+
+datePicker.addEventListener('change', loadTasks);
+
+function setupDrag(el, index) {
+    el.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', index);
+    });
+    el.addEventListener('dragover', e => e.preventDefault());
+    el.addEventListener('drop', e => {
+        const from = +e.dataTransfer.getData('text/plain');
+        const to = index;
+        const dateKey = getDateKey();
+        const moved = tasks[dateKey].splice(from,1)[0];
+        tasks[dateKey].splice(to,0,moved);
+        renderTasks();
+    });
+}
+
+loadTasks();
+</script>
+
+</body>
+          </html>
